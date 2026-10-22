@@ -109,6 +109,11 @@ Mali-G610 MC2, Vulkan 1.3.305, driver 54.1.0), 1080x1700:
 | Shader heavy (QtQuick, GLES, on screen) | — | 16 (capped at 60) |
 | Vulkan shader (offscreen, GPU timestamps) | 46,2 ms (best 43,3) | 21,7 |
 
+The same measurement, with more phases and both roads side by side, exists as
+a terminal tool: [smatkovi/feuerprobe](https://github.com/smatkovi/feuerprobe)
+— seven phases (clear, fill rate, two clouds, draw calls, texture taps, a
+compute pass), each through Vulkan and, as a twin, through GLES 2 and 3.
+
 Measuring the two roads fairly took two corrections worth writing down: run
 them **close together** (a long run warms the phone and the second road looks
 worse than it is), and keep the **precision equal** — a `sampler2D` without a
