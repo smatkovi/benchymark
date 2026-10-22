@@ -11,16 +11,21 @@ CONFIG += sailfishapp sailfishapp_i18n sailfishapp_i18n_idbased sailfishapp_i18n
 SOURCES += src/main.cpp \
     src/Wireframe.cpp \
     src/Dots.cpp \
-    src/SystemBench.cpp
+    src/SystemBench.cpp \
+    src/VulkanBench.cpp
 
 HEADERS += src/Wireframe.h \
     src/Dots.h \
     src/SystemBench.h \
+    src/VulkanBench.h \
+    src/vulkan-spv.h \
     src/FrameCounter.h \
     src/BenchLog.h \
     src/benchymesh.h
 
-DISTFILES += qml/harbour-benchymark.qml \
+DISTFILES += src/vulkan-full.vert \
+    src/vulkan-cloud.frag \
+    qml/harbour-benchymark.qml \
     qml/pages/*.qml \
     qml/stages/*.qml \
     qml/stages/*.js \

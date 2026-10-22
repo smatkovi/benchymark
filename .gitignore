@@ -3,3 +3,6 @@ build/
 *.o
 *.so
 *.ipk
+
+# Selbsttest der Vulkan-Stufe (tools/vulkan-selbsttest.sh)
+/bau/

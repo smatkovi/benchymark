@@ -1,6 +1,6 @@
 Name:       harbour-benchymark
 Summary:    Benchymark, a rendering benchmark
-Version:    1.3.0
+Version:    1.4.0
 Release:    1
 License:    GPLv3+
 URL:        https://github.com/moWerk/benchymark
@@ -15,6 +15,9 @@ BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
+# nur die Kopfdateien: libvulkan wird zur Laufzeit geladen (dlopen),
+# damit die App auch auf Geraeten ohne libhybris-libvulkan startet
+BuildRequires:  vulkan-headers
 BuildRequires:  desktop-file-utils
 BuildRequires:  qt5-qttools-linguist
 

@@ -45,6 +45,10 @@ Page {
         { name: qsTrId("id-stage-shader-heavy"), key: "SHADER-HEAVY", file: "ShaderHigh",
           //% "The same idea warped twice over, about thirty noise lookups per pixel: the heaviest GPU load here."
           about: qsTrId("id-about-shader-heavy") },
+        //% "Vulkan shader"
+        { name: qsTrId("id-stage-vulkan"), key: "VULKAN", file: "Vulkan",
+          //% "The same shader through Vulkan, drawn without a window into memory and timed by the GPU itself: what the other road costs for the same picture."
+          about: qsTrId("id-about-vulkan") },
         //% "Overdraw"
         { name: qsTrId("id-stage-overdraw"), key: "OVERDRAW", file: "Overdraw",
           //% "72 large translucent squares stacked and turning: every pixel is blended many times, raw fill rate."

@@ -78,6 +78,42 @@ Tap a stage name on the start page for one sentence on what it tests.
 | Memory throughput | memcpy between two 32 MB buffers; MB/s |
 | One million | JavaScript counting to one million, over and over, in a worker; millions/s |
 | Storage performance | 256 MB in 16 KB blocks with O_DIRECT, written and read, then deleted; MB/s. Off by default (flash wear) |
+| Vulkan shader | **(this fork)** the Shader heavy field again, through Vulkan, drawn without a window and timed by the GPU itself |
+
+### The Vulkan stage (this fork)
+
+`VULKAN` runs **the same picture as Shader heavy on the other road**. The
+fragment shader of `qml/stages/ShaderHigh.qml` is carried over to Vulkan GLSL
+character for character (`src/vulkan-cloud.frag`): same seven octaves, same
+five fBm sums, 140 `hash()` evaluations per pixel. What differs is the road to
+the GPU, nothing else — so the two numbers can be held against each other.
+
+It draws **without a window**, into an image in memory the size of the stage
+area, and times each frame with Vulkan's own timestamps
+(`vkCmdWriteTimestamp`, top to bottom of pipe, one pair per submission). The
+picture you see is that image, fetched once a second. Because nothing is
+presented, there is no vsync: the figure is what the GPU would manage for that
+frame, not what a display would show — which is why it may exceed the 60 the
+other stages are capped at.
+
+`libvulkan` is opened at **run time**, never linked. On a device without
+`libhybris-libvulkan` the app starts as always and the stage simply says *no
+Vulkan here* with the reason, and the result row carries that instead of a
+number.
+
+First numbers on the author's Jolla Phone 2026 (SailfishOS 5.2.0.18,
+Mali-G610 MC2, Vulkan 1.3.305, driver 54.1.0), 1080x1700:
+
+| road | per frame | frames/s |
+|---|---|---|
+| Shader heavy (QtQuick, GLES, on screen) | — | 16 (capped at 60) |
+| Vulkan shader (offscreen, GPU timestamps) | 46,2 ms (best 43,3) | 21,7 |
+
+Measuring the two roads fairly took two corrections worth writing down: run
+them **close together** (a long run warms the phone and the second road looks
+worse than it is), and keep the **precision equal** — a `sampler2D` without a
+qualifier is `lowp` in GLES, and fp16 texture work is about twice as fast as
+the fp32 a Vulkan shader does by default. Neither is a property of the API.
 
 First results (average fps, then the system values). The Jolla Phone and
 Xperia 10 II runs are by forum user ahjolinna
