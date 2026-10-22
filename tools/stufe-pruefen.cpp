@@ -17,6 +17,7 @@
 #include <QVariant>
 #include <QtQml>
 
+#include "../src/GlesBench.h"
 #include "../src/VulkanBench.h"
 
 int main(int argc, char **argv)
@@ -26,7 +27,8 @@ int main(int argc, char **argv)
     QTextStream aus(stdout);
 
     qmlRegisterType<VulkanEngine>("Benchymark", 1, 0, "VulkanEngine");
-    qmlRegisterType<VulkanView>("Benchymark", 1, 0, "VulkanView");
+    qmlRegisterType<OffscreenView>("Benchymark", 1, 0, "OffscreenView");
+    qmlRegisterType<GlesEngine>("Benchymark", 1, 0, "GlesEngine");
 
     const QString pfad = argc > 1 ? QString::fromLocal8Bit(argv[1])
                                   : QStringLiteral("qml/stages/Vulkan.qml");
@@ -44,10 +46,12 @@ int main(int argc, char **argv)
         return 1;
     }
     // Groesse vor dem Fertigstellen: Component.onCompleted startet den Lauf
-    stufe->setProperty("width", 540);
-    stufe->setProperty("height", 960);
-    stufe->setProperty("areaTop", 60);
-    stufe->setProperty("areaBottom", 960);
+    const int breite = argc > 3 ? atoi(argv[3]) : 540;
+    const int hoehe = argc > 4 ? atoi(argv[4]) : 960;
+    stufe->setProperty("width", breite);
+    stufe->setProperty("height", hoehe);
+    stufe->setProperty("areaTop", 0);
+    stufe->setProperty("areaBottom", hoehe);
     bauteil.completeCreate();
     if (bauteil.isError()) {
         for (const QQmlError &e : bauteil.errors())
@@ -57,8 +61,20 @@ int main(int argc, char **argv)
     aus << "Stufe geladen: " << pfad << endl;
 
     QObject::connect(stufe, SIGNAL(finished()), &app, SLOT(quit()));
-    QTimer::singleShot(30000, &app, SLOT(quit()));   // Notbremse
+    const int sekunden = argc > 2 ? atoi(argv[2]) : 4;
+    QTimer::singleShot(sekunden * 1000, &app, SLOT(quit()));
     app.exec();
+
+    // wie die Seite: Bilder und laengstes Bild abholen
+    QVariant quelle = stufe->property("frameSource");
+    if (QObject *q = quelle.value<QObject *>()) {
+        int bilder = 0, schlimmstes = 0;
+        QMetaObject::invokeMethod(q, "take", Q_RETURN_ARG(int, bilder));
+        QMetaObject::invokeMethod(q, "takeWorstMs", Q_RETURN_ARG(int, schlimmstes));
+        aus << "Bilder in " << sekunden << " s: " << bilder
+            << " (" << double(bilder) / sekunden << " fps), laengstes Bild "
+            << schlimmstes << " ms" << endl;
+    }
 
     QVariant zeilen;
     QMetaObject::invokeMethod(stufe, "results", Q_RETURN_ARG(QVariant, zeilen));

@@ -79,46 +79,63 @@ Tap a stage name on the start page for one sentence on what it tests.
 | One million | JavaScript counting to one million, over and over, in a worker; millions/s |
 | Storage performance | 256 MB in 16 KB blocks with O_DIRECT, written and read, then deleted; MB/s. Off by default (flash wear) |
 | Vulkan shader | **(this fork)** the Shader heavy field again, through Vulkan, drawn without a window and timed by the GPU itself |
+| GLES 3 shader | **(this fork)** the same field through plain OpenGL ES 3, own context, no window |
+| GLES 2 shader | **(this fork)** the same again with an ES 2 context and GLSL ES 1.00 — the version Qt 5.6 itself uses |
 
-### The Vulkan stage (this fork)
+### The Vulkan and GLES stages (this fork)
 
-`VULKAN` runs **the same picture as Shader heavy on the other road**. The
-fragment shader of `qml/stages/ShaderHigh.qml` is carried over to Vulkan GLSL
-character for character (`src/vulkan-cloud.frag`): same seven octaves, same
-five fBm sums, 140 `hash()` evaluations per pixel. What differs is the road to
-the GPU, nothing else — so the two numbers can be held against each other.
+Three stages run **the same picture as Shader heavy on three other roads**.
+The fragment shader of `qml/stages/ShaderHigh.qml` is carried over character
+for character — to Vulkan GLSL in `src/vulkan-cloud.frag`, and to the GLES
+stages as the very same ES source with only the header swapped
+(`attribute/varying` against `in/out`). Same seven octaves, same five fBm
+sums, 140 `hash()` evaluations per pixel. What differs is the road to the GPU:
 
-It draws **without a window**, into an image in memory the size of the stage
-area, and times each frame with Vulkan's own timestamps
-(`vkCmdWriteTimestamp`, top to bottom of pipe, one pair per submission). The
-picture you see is that image, fetched once a second. Because nothing is
-presented, there is no vsync: the figure is what the GPU would manage for that
-frame, not what a display would show — which is why it may exceed the 60 the
-other stages are capped at.
+| stage | road |
+|---|---|
+| Shader heavy | QtQuick's scene graph, on screen, through the window |
+| Vulkan shader | Vulkan, offscreen, timed with `vkCmdWriteTimestamp` |
+| GLES 3 shader | an own ES 3 context, offscreen, timed with `GL_EXT_disjoint_timer_query` |
+| GLES 2 shader | the same with an ES 2 context and GLSL ES 1.00 |
 
-`libvulkan` is opened at **run time**, never linked. On a device without
-`libhybris-libvulkan` the app starts as always and the stage simply says *no
-Vulkan here* with the reason, and the result row carries that instead of a
-number.
+All three draw **without a window**, into an image in memory the size of the
+stage area, and **count their own frames**: a stage may offer a `frameSource`,
+and the page then asks it once a second instead of the window's frame counter —
+so these stages end up with **avg, min and worst** in the table and in
+`last-run.json` exactly like every drawn stage. The picture on screen is that
+offscreen image, fetched once a second and scaled down by taking every fourth
+pixel (smoothing it cost over a hundred milliseconds and landed in `worst`).
+
+Because nothing is presented there is no vsync: the figures say what the GPU
+would manage for that frame, not what a display would show, and they may
+exceed the 60 the other stages are capped at.
+
+`libvulkan` is opened at **run time**, never linked: on a device without
+`libhybris-libvulkan` the app starts as always, the stage says *no Vulkan
+here* with the reason, and the result row carries that instead of a number.
+The GLES stages do the same when no ES 3 context is to be had.
 
 First numbers on the author's Jolla Phone 2026 (SailfishOS 5.2.0.18,
-Mali-G610 MC2, Vulkan 1.3.305, driver 54.1.0), 1080x1700:
+Mali-G610 MC2, Vulkan 1.3.305, driver 54.1.0), measured with
+`tools/stufe-pruefen.sh`, eight seconds per road, two passes:
 
-| road | per frame | frames/s |
+| road | 540x900 | 1080x1700 |
 |---|---|---|
-| Shader heavy (QtQuick, GLES, on screen) | — | 16 (capped at 60) |
-| Vulkan shader (offscreen, GPU timestamps) | 46,2 ms (best 43,3) | 21,7 |
+| Vulkan | 57,6 / 59,8 fps | 19,6 / 17,4 fps |
+| GLES 3 | 47,4 / 46,4 fps | 19,9 / 16,9 fps |
+| GLES 2 | 43,8 / 37,9 fps | 14,3 / 17,9 fps |
 
-The same measurement, with more phases and both roads side by side, exists as
-a terminal tool: [smatkovi/feuerprobe](https://github.com/smatkovi/feuerprobe)
-— seven phases (clear, fill rate, two clouds, draw calls, texture taps, a
-compute pass), each through Vulkan and, as a twin, through GLES 2 and 3.
+On the smaller area Vulkan is about a quarter ahead of ES 3, and ES 2 trails;
+at full panel size the three land **within the spread between two passes** —
+there the GPU is the bottleneck and the road hardly matters. Shader heavy
+itself reaches 16 fps on screen in the same app.
 
-Measuring the two roads fairly took two corrections worth writing down: run
-them **close together** (a long run warms the phone and the second road looks
-worse than it is), and keep the **precision equal** — a `sampler2D` without a
-qualifier is `lowp` in GLES, and fp16 texture work is about twice as fast as
-the fp32 a Vulkan shader does by default. Neither is a property of the API.
+Measuring the roads fairly took two corrections worth writing down: run them
+**close together** (a long run warms the phone, and the road measured last
+looks worse than it is), and keep the **precision equal** — a `sampler2D`
+without a qualifier is `lowp` in GLES, and fp16 texture work is about twice as
+fast as the fp32 a Vulkan shader does by default. Neither is a property of the
+API.
 
 First results (average fps, then the system values). The Jolla Phone and
 Xperia 10 II runs are by forum user ahjolinna

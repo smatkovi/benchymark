@@ -16,6 +16,7 @@
 #define VULKANBENCH_H
 
 #include <QAtomicInt>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QMutex>
 #include <QObject>
@@ -28,14 +29,19 @@
 
 // Zeigt, was Vulkan gezeichnet hat. Das Bild kommt vom Arbeitsfaden, einmal
 // in der Sekunde; gemalt wird es auf dem Oberflaechenfaden.
-class VulkanView : public QQuickPaintedItem
+class OffscreenView : public QQuickPaintedItem
 {
     Q_OBJECT
 public:
-    explicit VulkanView(QQuickItem *parent = nullptr);
+    explicit OffscreenView(QQuickItem *parent = nullptr);
     void paint(QPainter *painter) override;
     // aus jedem Faden aufrufbar
     void setPicture(const QImage &bild);
+    // Jeden n-ten Punkt nehmen statt zu glaetten: QImage::scaled mit
+    // SmoothTransformation kostet auf 1,8 Mpix ueber hundert Millisekunden,
+    // und die landen als laengstes Bild in der Messung. Die Vorschau muss
+    // nur zeigen, dass gezeichnet wird.
+    static QImage verkleinern(const uchar *punkte, int w, int h, int teiler, bool spiegeln);
 private:
     mutable QMutex m_lock;
     QImage m_bild;
@@ -57,7 +63,7 @@ class VulkanEngine : public QObject
     Q_PROPERTY(qreal bestMs READ bestMs NOTIFY changed)
     Q_PROPERTY(qreal fps READ fps NOTIFY changed)
     Q_PROPERTY(int frames READ frames NOTIFY changed)
-    Q_PROPERTY(VulkanView *view READ view WRITE setView)
+    Q_PROPERTY(OffscreenView *view READ view WRITE setView)
 public:
     explicit VulkanEngine(QObject *parent = nullptr);
     ~VulkanEngine() override;
@@ -71,14 +77,26 @@ public:
     qreal bestMs() const { QMutexLocker l(&m_lock); return m_bestMs; }
     qreal fps() const { QMutexLocker l(&m_lock); return m_gpuMs > 0 ? 1000.0 / m_gpuMs : 0.0; }
     int frames() const { QMutexLocker l(&m_lock); return m_frames; }
-    VulkanView *view() const { return m_view; }
-    void setView(VulkanView *v) { m_view = v; }
+    OffscreenView *view() const { return m_view; }
+    void setView(OffscreenView *v) { m_view = v; }
 
     // Breite und Hoehe in Pixeln, Vorheizen und Messen in Millisekunden.
-    // Vorgeheizt wird, weil die GPU erst unter Last hochtaktet; nach SHADER
-    // HEAVY ist sie es meist schon, darum reicht eine Sekunde.
-    Q_INVOKABLE void start(int w, int h, int preheatMs = 1000, int measureMs = 10000);
+    // measureMs <= 0 heisst: laufen, bis stop() kommt -- so macht es die
+    // Stufe, die wie jede andere von der Seite nach ihrer Zeit beendet wird.
+    Q_INVOKABLE void start(int w, int h, int preheatMs = 0, int measureMs = 0);
     Q_INVOKABLE void stop();
+
+    // Dieselben zwei Fragen wie beim FrameCounter, damit die Seite eine
+    // Vulkan-Stufe genauso abfragen kann wie eine gezeichnete: Bilder seit
+    // dem letzten Mal, und das laengste Bild darin.
+    Q_INVOKABLE int take() { return m_seit.fetchAndStoreRelaxed(0); }
+    Q_INVOKABLE int takeWorstMs()
+    {
+        QMutexLocker lock(&m_lock);
+        const int w = int(m_worstNs / 1000000);
+        m_worstNs = 0;
+        return w;
+    }
 
 signals:
     void changed();
@@ -90,7 +108,9 @@ private:
     mutable QMutex m_lock;
     FunctionThread *m_thread = nullptr;
     QAtomicInt m_stop;
-    QPointer<VulkanView> m_view;
+    QPointer<OffscreenView> m_view;
+    QAtomicInt m_seit;
+    qint64 m_worstNs = 0;
     int m_phase = 0;
     int m_frames = 0;
     qreal m_gpuMs = 0;

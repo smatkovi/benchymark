@@ -149,13 +149,13 @@ VkShaderModule modul(Lauf &l, const uint32_t *worte, size_t bytes)
 
 } // namespace
 
-// ---- VulkanView ---------------------------------------------------------
-VulkanView::VulkanView(QQuickItem *parent) : QQuickPaintedItem(parent)
+// ---- OffscreenView ---------------------------------------------------------
+OffscreenView::OffscreenView(QQuickItem *parent) : QQuickPaintedItem(parent)
 {
     setOpaquePainting(true);
 }
 
-void VulkanView::paint(QPainter *painter)
+void OffscreenView::paint(QPainter *painter)
 {
     QImage bild;
     {
@@ -170,7 +170,22 @@ void VulkanView::paint(QPainter *painter)
     painter->drawImage(boundingRect(), bild);
 }
 
-void VulkanView::setPicture(const QImage &bild)
+QImage OffscreenView::verkleinern(const uchar *punkte, int w, int h, int teiler, bool spiegeln)
+{
+    const int bw = qMax(1, w / teiler);
+    const int bh = qMax(1, h / teiler);
+    QImage klein(bw, bh, QImage::Format_RGBA8888);
+    for (int y = 0; y < bh; y++) {
+        const int qy = spiegeln ? (h - 1 - y * teiler) : (y * teiler);
+        const uchar *zeile = punkte + qint64(qy) * w * 4;
+        uchar *ziel = klein.scanLine(y);
+        for (int x = 0; x < bw; x++)
+            memcpy(ziel + x * 4, zeile + qint64(x) * teiler * 4, 4);
+    }
+    return klein;
+}
+
+void OffscreenView::setPicture(const QImage &bild)
 {
     {
         QMutexLocker lock(&m_lock);
@@ -515,10 +530,10 @@ void VulkanEngine::work(int w, int h, int preheatMs, int measureMs)
     QElapsedTimer vorschau;
     vorschau.start();
     const qint64 endeVorheizen = preheatMs;
-    const qint64 ende = preheatMs + measureMs;
+    const qint64 ende = measureMs > 0 ? preheatMs + measureMs : -1;   // -1: bis stop()
     melde(preheatMs > 0 ? 1 : 2);
 
-    while (!m_stop.load() && uhr.elapsed() < ende) {
+    while (!m_stop.load() && (ende < 0 || uhr.elapsed() < ende)) {
         const bool misst = uhr.elapsed() >= endeVorheizen;
         // t wie in der Stufe SHADER HEAVY: die QML-Animation laeuft von 0 bis
         // 10000 in 10000 Sekunden, also eine Einheit je Sekunde.
@@ -576,6 +591,15 @@ void VulkanEngine::work(int w, int h, int preheatMs, int measureMs)
                 ms = double(werte[1] - werte[0]) * double(l.zeitstempel_ns) / 1.0e6;
         }
 
+        // je Bild zaehlen und das laengste merken -- das holt sich die Seite
+        // einmal in der Sekunde ab, wie beim FrameCounter
+        m_seit.ref();
+        {
+            QMutexLocker lock(&m_lock);
+            if (qint64(ms * 1.0e6) > m_worstNs)
+                m_worstNs = qint64(ms * 1.0e6);
+        }
+
         if (misst) {
             zeiten.append(ms);
             QVector<double> sortiert = zeiten;
@@ -614,11 +638,8 @@ void VulkanEngine::work(int w, int h, int preheatMs, int measureMs)
             l.v.vkQueueSubmit(l.schlange, 1, &hs, l.zaun);
             l.v.vkWaitForFences(l.dev, 1, &l.zaun, VK_TRUE, 5000000000ull);
             l.v.vkResetFences(l.dev, 1, &l.zaun);
-            QImage bild(reinterpret_cast<const uchar *>(l.lesekarte), w, h,
-                        QImage::Format_RGBA8888);
-            // halbe Kantenlaenge reicht fuer die Vorschau und kostet wenig
-            m_view->setPicture(bild.scaled(w / 2, h / 2, Qt::IgnoreAspectRatio,
-                                           Qt::SmoothTransformation));
+            m_view->setPicture(OffscreenView::verkleinern(
+                reinterpret_cast<const uchar *>(l.lesekarte), w, h, 4, false));
         }
     }
 

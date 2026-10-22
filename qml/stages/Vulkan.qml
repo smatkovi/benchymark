@@ -8,11 +8,17 @@
 // die Stufe gleich hinter SHADER HEAVY: dieselbe Arbeit, dieselben Pixel,
 // anderer Weg -- und die GPU ist von der Stufe davor schon warm.
 //
+// Die Stufe zaehlt ihre Bilder selbst (`frameSource`), weil das Fenster von
+// ihrer Arbeit nichts sieht. Die Seite holt sich die Zahl einmal in der
+// Sekunde ab wie bei jeder gezeichneten Stufe, und es stehen am Ende
+// Mittel, Minimum und laengstes Bild da -- wie bei den anderen auch.
+//
 // Ohne Bildsynchronisierung (es haengt kein Schirm an dem Bild) sind die
 // Bilder/s nicht gedeckelt; sie sagen, was die GPU an diesem Bild schaffen
 // wuerde, nicht was die Anzeige zeigt.
 //
-// Auf Geraeten ohne libvulkan sagt die Stufe das und ist fertig.
+// Auf einem Geraet ohne libvulkan sagt die Stufe das und ist sofort fertig:
+// dann ist sie eine Systemstufe mit einer Zeile statt einer mit fps.
 import QtQuick 2.6
 import Benchymark 1.0
 
@@ -22,17 +28,17 @@ Item {
 
     property real areaTop: 0
     property real areaBottom: height
-    readonly property bool system: true
-    readonly property bool selfTimed: true
     property string live: ""
     signal finished()
 
-    // eine Sekunde vorheizen, zehn messen
-    readonly property int preheatMs: 1000
-    readonly property int measureMs: 10000
-    property bool ended: false
+    // Solange Vulkan da ist, ist das hier eine ganz gewoehnliche fps-Stufe.
+    // Fehlt es, wird sie zur Systemstufe mit einer erklaerenden Zeile und
+    // beendet sich selbst, statt eine Minute lang Nullen zu sammeln.
+    readonly property bool system: engine.phase === -1
+    readonly property bool selfTimed: engine.phase === -1
+    readonly property var frameSource: engine
 
-    VulkanView {
+    OffscreenView {
         id: bild
         x: 0
         y: stage.areaTop
@@ -54,38 +60,28 @@ Item {
         id: engine
         view: bild
         onChanged: {
-            if (phase === -1)
+            if (phase === -1) {
                 stage.live = qsTrId("id-vulkan-missing") + " · " + reason
-            else if (phase === 1)
-                //% "warming up"
-                stage.live = qsTrId("id-vulkan-warming")
-            else if (phase >= 2)
-                stage.live = Math.round(engine.fps) + " fps · " + engine.gpuMs.toFixed(1) + " ms"
-            if ((phase === 3 || phase === -1) && !stage.ended) {
-                stage.ended = true
                 stage.finished()
             }
         }
     }
 
+    // Kein Vorheizen: die Seite wirft die erste Sekunde ohnehin weg, und
+    // SHADER HEAVY lief gerade davor. Laeuft, bis die Seite die Stufe
+    // abraeumt.
     Component.onCompleted: engine.start(Math.round(width),
-                                        Math.round(areaBottom - areaTop),
-                                        preheatMs, measureMs)
+                                        Math.round(areaBottom - areaTop), 0, 0)
     Component.onDestruction: engine.stop()
 
-    // eine Zeile: Bilder je Sekunde fuer dasselbe Bild wie SHADER HEAVY
+    // nur fuer den Fall ohne Vulkan: eine Zeile statt fps
     function results() {
-        if (engine.phase === -1)
-            return [{ key: "VULKAN", name: qsTrId("id-stage-vulkan"),
-                      value: "–", unit: engine.reason }]
         return [{ key: "VULKAN", name: qsTrId("id-stage-vulkan"),
-                  value: Math.round(engine.fps), unit: "fps" }]
+                  value: "–", unit: engine.reason }]
     }
 
     //% "Vulkan shader"
     readonly property string _n: qsTrId("id-stage-vulkan")
     //% "no Vulkan here"
     readonly property string _m: qsTrId("id-vulkan-missing")
-    //% "warming up"
-    readonly property string _w: qsTrId("id-vulkan-warming")
 }

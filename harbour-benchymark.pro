@@ -12,16 +12,22 @@ SOURCES += src/main.cpp \
     src/Wireframe.cpp \
     src/Dots.cpp \
     src/SystemBench.cpp \
-    src/VulkanBench.cpp
+    src/VulkanBench.cpp \
+    src/GlesBench.cpp
 
 HEADERS += src/Wireframe.h \
     src/Dots.h \
     src/SystemBench.h \
     src/VulkanBench.h \
+    src/GlesBench.h \
     src/vulkan-spv.h \
     src/FrameCounter.h \
     src/BenchLog.h \
     src/benchymesh.h
+
+# Khronos-Kopfdateien im Baum: sonst braeuchte der Bau android-headers
+INCLUDEPATH += extern
+LIBS += -lEGL -lGLESv2
 
 DISTFILES += src/vulkan-full.vert \
     src/vulkan-cloud.frag \
